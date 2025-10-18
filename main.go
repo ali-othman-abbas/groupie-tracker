@@ -1,9 +1,10 @@
+//TODO: ADD PAGES FOR INDIVIDUAL ARTISTS
 package main
 
 import (
 	"encoding/json"
 	"fmt"
-	_ "html/template"
+	"html/template"
 	"net/http"
 	"project/env"
 	"slices"
@@ -12,13 +13,13 @@ import (
 )
 
 type Artist struct {
-	id               int
-	name             string
-	image            string
-	members          []string
-	creationDate     int
-	firstAlbum       string
-	locationDatesArr []LocationDates
+	Id               int
+	Name             string
+	Image            string
+	Members          []string
+	CreationDate     int
+	FirstAlbum       string
+	LocationDatesArr []LocationDates
 }
 
 type LocationDates struct {
@@ -48,18 +49,21 @@ type Relation struct {
 }
 
 const (
-	artistsUrl  string = "https://groupietrackers.herokuapp.com/api/artists"
-	relationUrl string = "https://groupietrackers.herokuapp.com/api/relation"
+	ARTSTSURL  string = "https://groupietrackers.herokuapp.com/api/artists"
+	RELATIONURL string = "https://groupietrackers.herokuapp.com/api/relation"
+	HOMEPAGEPATH string = "./templates/index.html"
+	ARTISTPAGEPATH string = "./templates/artist.html"
 )
 
 var (
 	nameToArtists = make(map[string]*Artist)
-	artistsArr    = []Artist{}
+	artistsArr    = []*Artist{}
 )
 
 func main() {
 	initalizeData()
 	http.HandleFunc("/", rootHandler)
+	http.HandleFunc("/page/", artistPageHandler)
 
 	fmt.Println("Starting server at port", env.PORT)
 	err := http.ListenAndServe(env.IP+env.PORT, nil)
@@ -69,20 +73,54 @@ func main() {
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(200)
-	for _, artist := range artistsArr {
-		fmt.Fprintf(w, "%v, %v, %v, %v, %v, %v, %v\n", artist.id, artist.image, artist.name, artist.members, artist.creationDate, artist.firstAlbum, artist.locationDatesArr)
-		fmt.Fprint(w, "----------------------\n")
+	if r.URL.Path != "/" {
+		writeError(w, "Invalid Request Path", 400)
+		return
+	}
+	data := struct {
+		Artists []*Artist
+	} {
+		Artists: artistsArr,
+	}
+	err := writeTemplate(w, HOMEPAGEPATH, data)
+	if err != nil {
+		fmt.Println("Inside rootHandler:- ")
+		fmt.Println(err)
+		writeError(w, "Internal Server Error", 500)
+	}
+}
+
+func artistPageHandler(w http.ResponseWriter, r *http.Request) {
+	artistName := strings.TrimPrefix(r.URL.Path, "/page/")
+	artist, ok := nameToArtists[artistName]
+	if !ok {
+		writeError(w, "Artist Page Doesn't Exist", 400)
+		return
+	} 
+	
+	data := struct {
+		ArtistPage *Artist
+	} {
+		ArtistPage: artist,
+	}
+	
+	err := writeTemplate(w, ARTISTPAGEPATH, data)
+	
+	if err != nil {
+		fmt.Println("inside artistPageHandler")
+		fmt.Println(err)
+		writeError(w, "Internal Server Error", 500)
+		return
 	}
 }
 
 func initalizeData() {
-	artistsResp, err := get[[]ArtistResponse](artistsUrl)
+	artistsResp, err := get[[]ArtistResponse](ARTSTSURL)
 	artists := *artistsResp
 	if err != nil {
 		fmt.Println("inside initalizeData:-\n" + err.Error())
 	}
-	relationResp, err := get[RelationResponse](relationUrl)
+	relationResp, err := get[RelationResponse](RELATIONURL)
 	if err != nil {
 		fmt.Println("inside initalizeData:-\n" + err.Error())
 	}
@@ -95,18 +133,27 @@ func initalizeData() {
 			artistObj.Image = fmt.Sprintf("http://%s%s/static/mamonas_assas.webp", env.IP, env.PORT)
 		}
 		artist := Artist{
-			id:               artistObj.Id,
-			name:             artistObj.Name,
-			image:            artistObj.Image,
-			members:          artistObj.Members,
-			creationDate:     artistObj.CreationDate,
-			firstAlbum:       artistObj.FirstAlbum,
-			locationDatesArr: getLocationDates(relationObj.DatesLocations),
+			Id:               artistObj.Id,
+			Name:             artistObj.Name,
+			Image:            artistObj.Image,
+			Members:          artistObj.Members,
+			CreationDate:     artistObj.CreationDate,
+			FirstAlbum:       artistObj.FirstAlbum,
+			LocationDatesArr: getLocationDates(relationObj.DatesLocations),
 		}
-		nameToArtists[artist.name] = &artist
-		artistsArr = append(artistsArr, artist)
+		nameToArtists[artist.Name] = &artist
+		artistsArr = append(artistsArr, &artist)
 	}
-
+	
+	slices.SortFunc(artistsArr, func(x *Artist, y *Artist) int {
+		if x.Name < y.Name {
+			return -1
+		} else if x.Name > y.Name {
+			return 1
+		}
+		
+		return 0
+	})
 }
 
 func getLocationDates(dateLocations map[string][]string) []LocationDates {
@@ -170,4 +217,23 @@ func get[T Response](url string) (*T, error) {
 	}
 
 	return &response, nil
+}
+
+func writeTemplate(w http.ResponseWriter, path string, data any) error {
+	templ, err := template.ParseFiles(path)
+	if err != nil {
+		fmt.Println("Inside writeTemplate")
+		return err
+	}
+	
+	err = templ.Execute(w, data)
+	if err != nil {
+		fmt.Println("Inside writeTemplate")
+		return err
+	}
+	return nil
+}
+
+func writeError(w http.ResponseWriter, errMsg string, statusCode int) {
+	http.Error(w, errMsg, statusCode)
 }
