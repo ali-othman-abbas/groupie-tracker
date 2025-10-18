@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<head>
+    <title>Groups</title>
+</head>
+<body>
+    <main>
+        {{ range .Artists}}
+        <figure>
+            <img src="{{ .Image }}" />
+            <figcaption>
+                <a href="/page/{{ .Name }}">{{ .Name }}</a>
+            </figcaption>
+        </figure>
+        {{ end }}
+    </main>
+</body>
