@@ -40,10 +40,10 @@ const (
 
 func InitalizeData() {
 	artistsResp, err := get[[]ArtistResponse](ARTSTSURL)
-	artists := *artistsResp
 	if err != nil {
 		fmt.Println("inside initalizeData:-\n" + err.Error())
 	}
+	artists := *artistsResp
 	relationResp, err := get[RelationResponse](RELATIONURL)
 	if err != nil {
 		fmt.Println("inside initalizeData:-\n" + err.Error())
